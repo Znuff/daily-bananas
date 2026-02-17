@@ -141,6 +141,13 @@ class Daily_Bananas_Cron_Handler {
 	 * Render the meta box showing generation status and regenerate button.
 	 */
 	public static function render_meta_box( WP_Post $post ): void {
+		// Only show content for posts in the configured category
+		$category_slug = Daily_Bananas_Settings::get( 'category' );
+		if ( empty( $category_slug ) || ! has_term( $category_slug, 'category', $post->ID ) ) {
+			echo '<p class="description">This post is not in the <strong>' . esc_html( $category_slug ) . '</strong> category.</p>';
+			return;
+		}
+
 		$status        = get_post_meta( $post->ID, '_daily_bananas_status', true );
 		$attachment_id = get_post_meta( $post->ID, '_daily_bananas_attachment_id', true );
 		$generated_at  = get_post_meta( $post->ID, '_daily_bananas_generated_at', true );
