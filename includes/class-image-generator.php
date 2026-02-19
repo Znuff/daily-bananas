@@ -194,9 +194,22 @@ class Daily_Bananas_Image_Generator {
 		}
 
 		// Log the full response structure if no image was found (for debugging)
-		Daily_Bananas_Logger::log( 'No image in response. Full response keys: ' . substr( wp_json_encode( array_keys( $decoded ) ), 0, 500 ), 'ERROR' );
+		Daily_Bananas_Logger::log( 'No image in response. Full response keys: ' . wp_json_encode( array_keys( $decoded ) ), 'ERROR' );
 		if ( isset( $decoded['candidates'][0] ) ) {
-			Daily_Bananas_Logger::log( 'Candidate keys: ' . wp_json_encode( array_keys( $decoded['candidates'][0] ) ), 'ERROR' );
+			$candidate = $decoded['candidates'][0];
+			Daily_Bananas_Logger::log( 'Candidate keys: ' . wp_json_encode( array_keys( $candidate ) ), 'ERROR' );
+			if ( isset( $candidate['finishReason'] ) ) {
+				Daily_Bananas_Logger::log( 'finishReason: ' . $candidate['finishReason'], 'ERROR' );
+			}
+			if ( isset( $candidate['finishMessage'] ) ) {
+				Daily_Bananas_Logger::log( 'finishMessage: ' . $candidate['finishMessage'], 'ERROR' );
+			}
+			if ( isset( $candidate['content'] ) ) {
+				Daily_Bananas_Logger::log( 'content keys: ' . wp_json_encode( array_keys( $candidate['content'] ) ), 'ERROR' );
+			}
+		}
+		if ( isset( $decoded['promptFeedback'] ) ) {
+			Daily_Bananas_Logger::log( 'promptFeedback: ' . wp_json_encode( $decoded['promptFeedback'] ), 'ERROR' );
 		}
 
 		return new WP_Error( 'api_no_image', 'Gemini response contained no image data.' );
