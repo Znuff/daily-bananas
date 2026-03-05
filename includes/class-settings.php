@@ -10,7 +10,7 @@ class Daily_Bananas_Settings {
 
 	const DEFAULTS = [
 		'api_key'         => '',
-		'model'           => 'gemini-3-pro-image-preview',
+		'model'           => 'gemini-3.1-flash-image-preview',
 		'category'        => 'stirile-zilei',
 		'aspect_ratio'    => '16:9',
 		'prompt'          => "Make a stylish image that is to be used for a blog post. The blog post is part of a category called 'ȘTIRILE ZILEI' (today's news). A good starting point would be a newspaper on a desk, with today's date and a headline of 'ȘTIRILE ZILEI'. Grab search result images for these urls: {urls} --",
@@ -38,8 +38,8 @@ class Daily_Bananas_Settings {
 
 	public static function add_menu_page() {
 		add_options_page(
-			'Daily Bananas',
-			'Daily Bananas',
+			'🍌 Daily Bananas',
+			'🍌 Daily Bananas',
 			'manage_options',
 			'daily-bananas',
 			[ __CLASS__, 'render_page' ]

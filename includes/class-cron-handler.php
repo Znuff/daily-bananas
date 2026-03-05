@@ -6,7 +6,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Daily_Bananas_Cron_Handler {
 
-	const CRON_HOOK = 'daily_bananas_generate';
+	const CRON_HOOK  = 'daily_bananas_generate';
+	const MAX_RETRIES = 3;
 
 	public static function init() {
 		add_action( 'transition_post_status', [ __CLASS__, 'on_post_published' ], 10, 3 );
@@ -116,10 +117,22 @@ class Daily_Bananas_Cron_Handler {
 		$success = Daily_Bananas_Image_Generator::generate_image( $post_id );
 
 		if ( $success ) {
+			delete_post_meta( $post_id, '_daily_bananas_retry_count' );
 			Daily_Bananas_Logger::log( "=== CRON RUN SUCCESS for post {$post_id} ===" );
 		} else {
-			update_post_meta( $post_id, '_daily_bananas_status', 'failed' );
-			Daily_Bananas_Logger::log( "=== CRON RUN FAILED for post {$post_id} ===", 'ERROR' );
+			$retry_count = (int) get_post_meta( $post_id, '_daily_bananas_retry_count', true );
+			$retry_count++;
+
+			if ( $retry_count < self::MAX_RETRIES ) {
+				update_post_meta( $post_id, '_daily_bananas_retry_count', $retry_count );
+				update_post_meta( $post_id, '_daily_bananas_status', 'failed' );
+				wp_schedule_single_event( time(), self::CRON_HOOK, [ $post_id ] );
+				Daily_Bananas_Logger::log( "=== CRON RUN FAILED for post {$post_id} (attempt {$retry_count}/" . self::MAX_RETRIES . ", retrying on next cron run) ===", 'ERROR' );
+			} else {
+				update_post_meta( $post_id, '_daily_bananas_retry_count', $retry_count );
+				update_post_meta( $post_id, '_daily_bananas_status', 'failed' );
+				Daily_Bananas_Logger::log( "=== CRON RUN FAILED for post {$post_id} (attempt {$retry_count}/" . self::MAX_RETRIES . ", giving up) ===", 'ERROR' );
+			}
 		}
 	}
 
@@ -210,6 +223,7 @@ class Daily_Bananas_Cron_Handler {
 		delete_post_meta( $post_id, '_daily_bananas_status' );
 		delete_post_meta( $post_id, '_daily_bananas_attachment_id' );
 		delete_post_meta( $post_id, '_daily_bananas_generated_at' );
+		delete_post_meta( $post_id, '_daily_bananas_retry_count' );
 
 		// Also unschedule any existing event to avoid dedup blocking
 		$timestamp = wp_next_scheduled( self::CRON_HOOK, [ $post_id ] );

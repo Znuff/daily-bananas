@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'DAILY_BANANAS_VERSION', '1.0.1' );
+define( 'DAILY_BANANAS_VERSION', '1.0.2' );
 define( 'DAILY_BANANAS_DIR', plugin_dir_path( __FILE__ ) );
 
 // Load classes (logger first - others depend on it)
