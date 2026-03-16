@@ -12,6 +12,7 @@ class Daily_Bananas_Image_Generator {
 		'image/jpeg' => 'jpg',
 		'image/png'  => 'png',
 		'image/webp' => 'webp',
+		'image/avif' => 'avif',
 		'image/gif'  => 'gif',
 	];
 
@@ -75,6 +76,19 @@ class Daily_Bananas_Image_Generator {
 		}
 
 		Daily_Bananas_Logger::log( 'API returned image: mimeType=' . $result['mimeType'] . ', size=' . strlen( $result['data'] ) . ' bytes' );
+
+		// Convert to target format if needed
+		$target_format = Daily_Bananas_Settings::get( 'output_format' );
+		if ( $target_format !== 'png' ) {
+			Daily_Bananas_Logger::log( "Converting image to {$target_format}" );
+			$converted = self::convert_image( $result['data'], $target_format );
+			if ( ! is_wp_error( $converted ) ) {
+				$result = $converted;
+				Daily_Bananas_Logger::log( "Converted: mimeType={$result['mimeType']}, size=" . strlen( $result['data'] ) . ' bytes' );
+			} else {
+				Daily_Bananas_Logger::log( 'Conversion failed: ' . $converted->get_error_message() . ', keeping original PNG', 'WARN' );
+			}
+		}
 
 		// Upload to media library
 		$attachment_id = self::upload_to_media_library(
@@ -213,6 +227,81 @@ class Daily_Bananas_Image_Generator {
 		}
 
 		return new WP_Error( 'api_no_image', 'Gemini response contained no image data.' );
+	}
+
+	/**
+	 * Convert raw image data to a different format using GD or Imagick.
+	 *
+	 * @param string $image_data   Raw image bytes (PNG from API).
+	 * @param string $target_format One of: jpeg, webp, avif.
+	 * @return array{data: string, mimeType: string}|WP_Error
+	 */
+	private static function convert_image( string $image_data, string $target_format ) {
+		$format_map = [
+			'jpeg' => [ 'mime' => 'image/jpeg', 'imagick' => 'JPEG' ],
+			'webp' => [ 'mime' => 'image/webp',  'imagick' => 'WEBP' ],
+			'avif' => [ 'mime' => 'image/avif',  'imagick' => 'AVIF' ],
+		];
+
+		if ( ! isset( $format_map[ $target_format ] ) ) {
+			return new WP_Error( 'convert_unknown_format', "Unknown target format: {$target_format}" );
+		}
+
+		$mime = $format_map[ $target_format ]['mime'];
+
+		// Try GD first
+		if ( function_exists( 'imagecreatefromstring' ) ) {
+			$im = imagecreatefromstring( $image_data );
+			if ( $im !== false ) {
+				imagepalettetotruecolor( $im );
+				imagealphablending( $im, true );
+				imagesavealpha( $im, true );
+
+				ob_start();
+				$ok = false;
+				switch ( $target_format ) {
+					case 'jpeg':
+						$ok = imagejpeg( $im, null, 85 );
+						break;
+					case 'webp':
+						if ( function_exists( 'imagewebp' ) ) {
+							$ok = imagewebp( $im, null, 85 );
+						}
+						break;
+					case 'avif':
+						if ( function_exists( 'imageavif' ) ) {
+							$ok = imageavif( $im, null, 75, 6 );
+						}
+						break;
+				}
+				$converted = ob_get_clean();
+				imagedestroy( $im );
+
+				if ( $ok && ! empty( $converted ) ) {
+					return [ 'data' => $converted, 'mimeType' => $mime ];
+				}
+			}
+		}
+
+		// Fall back to Imagick
+		if ( extension_loaded( 'imagick' ) ) {
+			try {
+				$imagick = new Imagick();
+				$imagick->readImageBlob( $image_data );
+				$imagick->setImageFormat( $format_map[ $target_format ]['imagick'] );
+				$imagick->setImageCompressionQuality( $target_format === 'avif' ? 75 : 85 );
+				$converted = $imagick->getImageBlob();
+				$imagick->destroy();
+
+				if ( ! empty( $converted ) ) {
+					return [ 'data' => $converted, 'mimeType' => $mime ];
+				}
+			} catch ( Exception $e ) {
+				Daily_Bananas_Logger::log( 'Imagick conversion error: ' . $e->getMessage(), 'WARN' );
+			}
+		}
+
+		return new WP_Error( 'convert_no_library', "No library available to convert to {$target_format}" );
 	}
 
 	/**

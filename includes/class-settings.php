@@ -18,6 +18,7 @@ class Daily_Bananas_Settings {
 		'max_urls'        => '3',
 		'randomize_urls'  => '0',
 		'filename'        => 'stirile_zilei_{date}',
+		'output_format'   => 'png',
 		'debug'           => '1',
 	];
 
@@ -82,6 +83,7 @@ class Daily_Bananas_Settings {
 		self::add_field( 'max_urls', 'Max URLs in Prompt', 'render_max_urls_field', 'daily_bananas_prompt' );
 		self::add_field( 'randomize_urls', 'Randomize URLs', 'render_randomize_urls_field', 'daily_bananas_prompt' );
 		self::add_field( 'filename', 'Image Filename', 'render_filename_field', 'daily_bananas_content' );
+		self::add_field( 'output_format', 'Output Format', 'render_output_format_field', 'daily_bananas_content' );
 
 		// Debug section
 		add_settings_section(
@@ -226,6 +228,35 @@ class Daily_Bananas_Settings {
 		);
 	}
 
+	public static function render_output_format_field() {
+		$current   = self::get( 'output_format' );
+		$name      = esc_attr( self::OPTION_PREFIX . 'output_format' );
+		$supported = self::get_supported_output_formats();
+
+		$formats = [
+			'png'  => 'PNG (Original, Lossless)',
+			'jpeg' => 'JPEG',
+			'webp' => 'WebP',
+			'avif' => 'AVIF',
+		];
+
+		echo '<select name="' . $name . '">';
+		foreach ( $formats as $value => $label ) {
+			$is_supported  = ! empty( $supported[ $value ] );
+			$disabled      = $is_supported ? '' : ' disabled';
+			$label_display = $is_supported ? $label : $label . ' (not supported)';
+			printf(
+				'<option value="%s"%s%s>%s</option>',
+				esc_attr( $value ),
+				selected( $current, $value, false ),
+				$disabled,
+				esc_html( $label_display )
+			);
+		}
+		echo '</select>';
+		echo '<p class="description">Output format for saved images. WebP and AVIF require server-side support (GD or ImageMagick).</p>';
+	}
+
 	public static function render_debug_field() {
 		$value = self::get( 'debug' );
 		printf(
@@ -279,6 +310,29 @@ class Daily_Bananas_Settings {
 
 	public static function sanitize_debug( $value ) {
 		return $value === '1' ? '1' : '0';
+	}
+
+	public static function sanitize_output_format( $value ) {
+		return in_array( $value, [ 'png', 'jpeg', 'webp', 'avif' ], true ) ? $value : 'png';
+	}
+
+	public static function get_supported_output_formats(): array {
+		$supported = [ 'png' => true, 'jpeg' => true ];
+
+		$imagick_formats = [];
+		if ( extension_loaded( 'imagick' ) ) {
+			try {
+				$imagick         = new Imagick();
+				$imagick_formats = $imagick->queryFormats();
+			} catch ( Exception $e ) {
+				// Imagick unavailable despite extension being loaded
+			}
+		}
+
+		$supported['webp'] = function_exists( 'imagewebp' ) || in_array( 'WEBP', $imagick_formats, true );
+		$supported['avif'] = function_exists( 'imageavif' ) || in_array( 'AVIF', $imagick_formats, true );
+
+		return $supported;
 	}
 
 	public static function sanitize_ignored_domains( $value ) {
