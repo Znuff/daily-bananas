@@ -3,7 +3,7 @@
  * Plugin Name:       Daily Bananas
  * Plugin URI:        https://github.com/Znuff/daily-bananas
  * Description:       Auto-generates featured images for posts using Google Gemini API.
- * Version:           1.1.0
+ * Version:           1.2.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Znuff
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'DAILY_BANANAS_VERSION', '1.1.0' );
+define( 'DAILY_BANANAS_VERSION', '1.2.0' );
 define( 'DAILY_BANANAS_DIR', plugin_dir_path( __FILE__ ) );
 
 // Load classes (logger first - others depend on it)

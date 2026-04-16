@@ -70,6 +70,15 @@ class Daily_Bananas_Image_Generator {
 
 		$result = self::call_api( $prompt, $model, $api_key, $aspect_ratio );
 
+		if ( is_wp_error( $result ) && 'api_image_other' === $result->get_error_code() ) {
+			$suffix = Daily_Bananas_Settings::get( 'fallback_prompt_suffix' );
+			if ( ! empty( $suffix ) ) {
+				Daily_Bananas_Logger::log( 'IMAGE_OTHER received — retrying with fallback prompt suffix: "' . $suffix . '"' );
+				$fallback_prompt = $prompt . "\n\n" . $suffix;
+				$result          = self::call_api( $fallback_prompt, $model, $api_key, $aspect_ratio );
+			}
+		}
+
 		if ( is_wp_error( $result ) ) {
 			Daily_Bananas_Logger::log( 'API error: ' . $result->get_error_message(), 'ERROR' );
 			return false;
@@ -224,6 +233,11 @@ class Daily_Bananas_Image_Generator {
 		}
 		if ( isset( $decoded['promptFeedback'] ) ) {
 			Daily_Bananas_Logger::log( 'promptFeedback: ' . wp_json_encode( $decoded['promptFeedback'] ), 'ERROR' );
+		}
+
+		$finish_reason = $decoded['candidates'][0]['finishReason'] ?? '';
+		if ( 'IMAGE_OTHER' === $finish_reason ) {
+			return new WP_Error( 'api_image_other', 'Gemini response contained no image data (IMAGE_OTHER).' );
 		}
 
 		return new WP_Error( 'api_no_image', 'Gemini response contained no image data.' );

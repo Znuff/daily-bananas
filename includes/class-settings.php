@@ -18,8 +18,9 @@ class Daily_Bananas_Settings {
 		'max_urls'        => '3',
 		'randomize_urls'  => '0',
 		'filename'        => 'stirile_zilei_{date}',
-		'output_format'   => 'png',
-		'debug'           => '1',
+		'output_format'          => 'png',
+		'fallback_prompt_suffix' => 'Use an illustrated or caricature style for any people depicted.',
+		'debug'                  => '1',
 	];
 
 	const ASPECT_RATIOS = [
@@ -79,6 +80,7 @@ class Daily_Bananas_Settings {
 		);
 
 		self::add_field( 'prompt', 'Prompt Template', 'render_prompt_field', 'daily_bananas_prompt' );
+		self::add_field( 'fallback_prompt_suffix', 'Fallback Prompt Suffix', 'render_fallback_prompt_suffix_field', 'daily_bananas_prompt' );
 		self::add_field( 'ignored_domains', 'Ignored Domains', 'render_ignored_domains_field', 'daily_bananas_prompt' );
 		self::add_field( 'max_urls', 'Max URLs in Prompt', 'render_max_urls_field', 'daily_bananas_prompt' );
 		self::add_field( 'randomize_urls', 'Randomize URLs', 'render_randomize_urls_field', 'daily_bananas_prompt' );
@@ -183,6 +185,16 @@ class Daily_Bananas_Settings {
 			<p class="description">Use <code>{urls}</code> as a placeholder for extracted post links.</p>',
 			esc_attr( self::OPTION_PREFIX . 'prompt' ),
 			esc_textarea( $value )
+		);
+	}
+
+	public static function render_fallback_prompt_suffix_field() {
+		$value = self::get( 'fallback_prompt_suffix' );
+		printf(
+			'<input type="text" name="%s" value="%s" class="large-text" />
+			<p class="description">Appended to the prompt and retried immediately when Gemini returns <code>IMAGE_OTHER</code> (content policy block). Leave blank to disable the retry.</p>',
+			esc_attr( self::OPTION_PREFIX . 'fallback_prompt_suffix' ),
+			esc_attr( $value )
 		);
 	}
 
@@ -310,6 +322,10 @@ class Daily_Bananas_Settings {
 
 	public static function sanitize_debug( $value ) {
 		return $value === '1' ? '1' : '0';
+	}
+
+	public static function sanitize_fallback_prompt_suffix( $value ) {
+		return sanitize_text_field( $value );
 	}
 
 	public static function sanitize_output_format( $value ) {
