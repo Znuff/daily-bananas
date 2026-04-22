@@ -21,25 +21,20 @@ class Daily_Bananas_Cron_Handler {
 	 * for posts newly published in the configured category.
 	 */
 	public static function on_post_published( string $new_status, string $old_status, WP_Post $post ): void {
-		Daily_Bananas_Logger::log(
-			"transition_post_status fired: post={$post->ID}, type={$post->post_type}, " .
-			"old_status={$old_status}, new_status={$new_status}, title=\"{$post->post_title}\""
-		);
-
 		// Only on transition TO publish (not re-saves of already published posts)
 		if ( 'publish' !== $new_status || 'publish' === $old_status ) {
-			Daily_Bananas_Logger::log(
-				"SKIPPED post {$post->ID}: status transition {$old_status} -> {$new_status} " .
-				"(need non-publish -> publish)"
-			);
 			return;
 		}
 
 		// Only for standard posts
 		if ( 'post' !== $post->post_type ) {
-			Daily_Bananas_Logger::log( "SKIPPED post {$post->ID}: post_type is '{$post->post_type}', not 'post'" );
 			return;
 		}
+
+		Daily_Bananas_Logger::log(
+			"transition_post_status fired: post={$post->ID}, type={$post->post_type}, " .
+			"old_status={$old_status}, new_status={$new_status}, title=\"{$post->post_title}\""
+		);
 
 		// Check if post belongs to the configured category
 		$category_slug = Daily_Bananas_Settings::get( 'category' );

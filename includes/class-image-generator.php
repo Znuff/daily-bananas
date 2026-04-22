@@ -44,23 +44,27 @@ class Daily_Bananas_Image_Generator {
 		$urls = Daily_Bananas_Link_Extractor::extract( $post->post_content, $ignored );
 		Daily_Bananas_Logger::log( 'Extracted ' . count( $urls ) . ' URLs: [' . implode( ', ', $urls ) . ']' );
 
+		// Keep full URL pool for retry shuffling
+		$all_urls = $urls;
+
 		// Randomize URL order if enabled (before slicing to max)
-		if ( Daily_Bananas_Settings::get( 'randomize_urls' ) === '1' && count( $urls ) > 1 ) {
-			shuffle( $urls );
-			Daily_Bananas_Logger::log( 'Shuffled URLs: [' . implode( ', ', $urls ) . ']' );
+		if ( Daily_Bananas_Settings::get( 'randomize_urls' ) === '1' && count( $all_urls ) > 1 ) {
+			shuffle( $all_urls );
+			Daily_Bananas_Logger::log( 'Shuffled URLs: [' . implode( ', ', $all_urls ) . ']' );
 		}
 
 		// Limit to configured max URLs (use whatever is available if fewer)
-		$max_urls = (int) Daily_Bananas_Settings::get( 'max_urls' );
-		if ( $max_urls > 0 && count( $urls ) > $max_urls ) {
-			$urls = array_slice( $urls, 0, $max_urls );
-			Daily_Bananas_Logger::log( "Trimmed to {$max_urls} URLs: [" . implode( ', ', $urls ) . ']' );
+		$max_urls      = (int) Daily_Bananas_Settings::get( 'max_urls' );
+		$selected_urls = ( $max_urls > 0 && count( $all_urls ) > $max_urls )
+			? array_slice( $all_urls, 0, $max_urls )
+			: $all_urls;
+		if ( count( $selected_urls ) < count( $all_urls ) ) {
+			Daily_Bananas_Logger::log( "Trimmed to {$max_urls} URLs: [" . implode( ', ', $selected_urls ) . ']' );
 		}
 
 		// Build prompt
 		$prompt_template = Daily_Bananas_Settings::get( 'prompt' );
-		$url_string      = implode( ', ', $urls );
-		$prompt          = str_replace( '{urls}', $url_string, $prompt_template );
+		$prompt          = str_replace( '{urls}', implode( ', ', $selected_urls ), $prompt_template );
 		Daily_Bananas_Logger::log( 'Prompt built (' . strlen( $prompt ) . ' chars): ' . substr( $prompt, 0, 200 ) . '...' );
 
 		// Call Gemini API
@@ -68,15 +72,30 @@ class Daily_Bananas_Image_Generator {
 		$aspect_ratio = Daily_Bananas_Settings::get( 'aspect_ratio' );
 		Daily_Bananas_Logger::log( "Calling Gemini API: model={$model}, aspect_ratio={$aspect_ratio}" );
 
-		$result = self::call_api( $prompt, $model, $api_key, $aspect_ratio );
+		$max_retries = 8;
+		$result      = self::call_api( $prompt, $model, $api_key, $aspect_ratio );
 
-		if ( is_wp_error( $result ) && 'api_image_other' === $result->get_error_code() ) {
-			$suffix = Daily_Bananas_Settings::get( 'fallback_prompt_suffix' );
-			if ( ! empty( $suffix ) ) {
-				Daily_Bananas_Logger::log( 'IMAGE_OTHER received — retrying with fallback prompt suffix: "' . $suffix . '"' );
-				$fallback_prompt = $prompt . "\n\n" . $suffix;
-				$result          = self::call_api( $fallback_prompt, $model, $api_key, $aspect_ratio );
+		for ( $retry = 1; $retry <= $max_retries && is_wp_error( $result ) && 'api_image_other' === $result->get_error_code(); $retry++ ) {
+			// Shuffle the full pool and pick a fresh selection
+			shuffle( $all_urls );
+			$selected_urls  = ( $max_urls > 0 && count( $all_urls ) > $max_urls )
+				? array_slice( $all_urls, 0, $max_urls )
+				: $all_urls;
+			$retry_prompt = str_replace( '{urls}', implode( ', ', $selected_urls ), $prompt_template );
+
+			if ( $retry === $max_retries ) {
+				$suffix = Daily_Bananas_Settings::get( 'fallback_prompt_suffix' );
+				if ( ! empty( $suffix ) ) {
+					$retry_prompt .= "\n\n" . $suffix;
+					Daily_Bananas_Logger::log( "Retry {$retry}/{$max_retries} (+ fallback suffix): full prompt:\n{$retry_prompt}" );
+				} else {
+					Daily_Bananas_Logger::log( "Retry {$retry}/{$max_retries} (no fallback suffix): full prompt:\n{$retry_prompt}" );
+				}
+			} else {
+				Daily_Bananas_Logger::log( "Retry {$retry}/{$max_retries}: full prompt:\n{$retry_prompt}" );
 			}
+
+			$result = self::call_api( $retry_prompt, $model, $api_key, $aspect_ratio );
 		}
 
 		if ( is_wp_error( $result ) ) {
